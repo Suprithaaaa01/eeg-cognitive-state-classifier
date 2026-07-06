@@ -1,0 +1,26 @@
+# Virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (EEG datasets are large — we'll document how to download, not commit them)
+data/
+*.edf
+*.fif
+
+# OS
+.DS_Store
+
+# Environment variables / secrets
+.env
+
+# MLflow
+mlruns/
+
+# Model checkpoints (can be large)
+*.pt
+*.pth
+*.pkl
