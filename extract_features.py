@@ -1,44 +1,59 @@
 import mne
 import numpy as np
+import glob
 
-# Load and epoch the data (same as before)
-raw = mne.io.read_raw_edf('data/MNE-eegbci-data/files/eegmmidb/1.0.0/S001/S001R04.edf', preload=True)
-events, event_id = mne.events_from_annotations(raw)
-epochs = mne.Epochs(raw, events, event_id, tmin=0, tmax=4, baseline=None, preload=True)
+mne.set_log_level('WARNING')
 
-# Define frequency bands of interest (Hz)
 bands = {
     'mu': (8, 12),
     'beta': (13, 30)
 }
 
-# Get epoch data as a numpy array: shape (n_epochs, n_channels, n_timepoints)
-data = epochs.get_data()
-sfreq = raw.info['sfreq']
+all_X = []
+all_y = []
 
-print(f"Epoch data shape: {data.shape}")  # (epochs, channels, timepoints)
+# Find all downloaded EDF files for runs 4, 8, 12 across all subjects
+edf_files = sorted(glob.glob('data/MNE-eegbci-data/files/eegmmidb/1.0.0/S*/S*R04.edf')) + \
+            sorted(glob.glob('data/MNE-eegbci-data/files/eegmmidb/1.0.0/S*/S*R08.edf')) + \
+            sorted(glob.glob('data/MNE-eegbci-data/files/eegmmidb/1.0.0/S*/S*R12.edf'))
 
-# Compute band power for each epoch, channel, and band using MNE's built-in PSD function
-features_list = []
+print(f"Found {len(edf_files)} EDF files to process")
 
-for band_name, (fmin, fmax) in bands.items():
-    psd, freqs = mne.time_frequency.psd_array_welch(
-        data, sfreq=sfreq, fmin=fmin, fmax=fmax, verbose=False
-    )
-    # Average power across frequencies within the band -> shape (epochs, channels)
-    band_power = psd.mean(axis=2)
-    features_list.append(band_power)
-    print(f"{band_name} band power shape: {band_power.shape}")
+for filepath in edf_files:
+    try:
+        raw = mne.io.read_raw_edf(filepath, preload=True)
+        events, event_id = mne.events_from_annotations(raw)
+        epochs = mne.Epochs(raw, events, event_id, tmin=0, tmax=4, baseline=None, preload=True)
 
-# Concatenate mu and beta features side by side -> shape (epochs, channels * 2)
-X = np.concatenate(features_list, axis=1)
-y = epochs.events[:, -1]  # the labels: 1=rest, 2=left, 3=right
+        data = epochs.get_data()
+        sfreq = raw.info['sfreq']
 
-print(f"\nFinal feature matrix X shape: {X.shape}")
-print(f"Labels y shape: {y.shape}")
-print(f"Label distribution: {np.bincount(y)}")
+        features_list = []
+        for band_name, (fmin, fmax) in bands.items():
+            psd, freqs = mne.time_frequency.psd_array_welch(
+                data, sfreq=sfreq, fmin=fmin, fmax=fmax, verbose=False
+            )
+            band_power = psd.mean(axis=2)
+            features_list.append(band_power)
 
-# Save these for the next step (training a model)
-np.save('X_features.npy', X)
-np.save('y_labels.npy', y)
-print("\nSaved features to X_features.npy and y_labels.npy")
+        X = np.concatenate(features_list, axis=1)
+        y = epochs.events[:, -1]
+
+        all_X.append(X)
+        all_y.append(y)
+        print(f"Processed {filepath}: {X.shape[0]} epochs")
+
+    except Exception as e:
+        print(f"Skipping {filepath} due to error: {e}")
+
+# Combine everything into one big dataset
+X_all = np.concatenate(all_X, axis=0)
+y_all = np.concatenate(all_y, axis=0)
+
+print(f"\nFinal combined feature matrix: {X_all.shape}")
+print(f"Final labels: {y_all.shape}")
+print(f"Label distribution: {np.bincount(y_all)}")
+
+np.save('X_features.npy', X_all)
+np.save('y_labels.npy', y_all)
+print("\nSaved combined features to X_features.npy and y_labels.npy")
