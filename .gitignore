@@ -24,3 +24,4 @@ mlruns/
 *.pt
 *.pth
 *.pkl
+*.npy
