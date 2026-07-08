@@ -25,3 +25,4 @@ mlruns/
 *.pth
 *.pkl
 *.npy
+!eegnet_best_model.pt
